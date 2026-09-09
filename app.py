@@ -1,7 +1,6 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import streamlit as st
@@ -18,8 +17,7 @@ st.set_page_config(
 
 st.title("Parametric Cube Wireframe + 3D Text")
 st.caption(
-    "A projector-friendly wireframe generator. The text lives on a rotatable plane "
-    "at the geometric center of the cube; the wireframe is drawn on top so every edge stays continuous."
+    "Text size is geometric and relative to the cube face, rather than tied to raster pixels."
 )
 
 
@@ -31,16 +29,17 @@ def discover_fonts():
             try:
                 prop = font_manager.FontProperties(fname=path)
                 name = prop.get_name()
-                # Keep one file per family name, preferring bold-ish filenames where possible.
                 prev = found.get(name)
-                if prev is None or ("bold" in Path(path).stem.lower() and "bold" not in Path(prev).stem.lower()):
+                if prev is None or (
+                    "bold" in Path(path).stem.lower()
+                    and "bold" not in Path(prev).stem.lower()
+                ):
                     found[name] = path
             except Exception:
                 pass
     except Exception:
         pass
 
-    # Guaranteed fallback label; renderer will resolve its own default.
     items = [("Default Bold", None)]
     items += sorted(found.items(), key=lambda x: x[0].lower())
     return items
@@ -52,7 +51,12 @@ font_lookup = dict(fonts)
 
 with st.sidebar:
     st.header("Output")
-    preset = st.selectbox("Canvas preset", ["16:9 — 1600×900", "Full HD — 1920×1080", "4:3 — 1600×1200", "Custom"])
+
+    preset = st.selectbox(
+        "Canvas preset",
+        ["16:9 — 1600×900", "Full HD — 1920×1080", "4:3 — 1600×1200", "Custom"],
+    )
+
     if preset == "16:9 — 1600×900":
         width, height = 1600, 900
     elif preset == "Full HD — 1920×1080":
@@ -66,6 +70,7 @@ with st.sidebar:
 
     st.divider()
     st.header("Cube / camera")
+
     cube_scale = st.slider("Cube size", 0.4, 1.6, 1.0, 0.01)
     pan_deg = st.slider("Pan / yaw (°)", -75.0, 75.0, 0.0, 0.5)
     tilt_deg = st.slider("Tilt / pitch (°)", -75.0, 75.0, 0.0, 0.5)
@@ -75,20 +80,37 @@ with st.sidebar:
 
     st.divider()
     st.header("Wireframe")
+
     line_thickness = st.slider("Line thickness", 1.0, 30.0, 8.0, 0.5)
     thinning_strength = st.slider(
         "Perspective thinning",
-        0.0, 2.0, 0.75, 0.05,
-        help="0 = constant stroke width. Higher values make distant edges thinner and near edges thicker."
+        0.0,
+        2.0,
+        0.75,
+        0.05,
+        help="0 = constant width; larger values exaggerate near/far stroke differences.",
     )
 
     st.divider()
     st.header("Text")
+
     text = st.text_area("Text", "THIS\nIS\nMATH", height=120)
     selected_font = st.selectbox("Font", font_labels, index=0)
     font_path = font_lookup[selected_font]
-    font_size = st.slider("Font size", 12, 220, 92, 1)
-    line_spacing = st.slider("Line spacing", 0.8, 1.8, 1.05, 0.01)
+
+    text_size_pct = st.slider(
+        "Text block size (% of cube face)",
+        10,
+        130,
+        80,
+        1,
+        help=(
+            "This is the actual geometric size. 80% means the text block's largest "
+            "dimension occupies about 80% of one cube-face edge."
+        ),
+    )
+
+    line_spacing = st.slider("Line spacing", 0.75, 1.80, 1.05, 0.01)
 
     st.subheader("Text rotation")
     text_rx_deg = st.slider("X rotation (°)", -90.0, 90.0, 0.0, 0.5)
@@ -96,7 +118,12 @@ with st.sidebar:
     text_rz_deg = st.slider("Z rotation (°)", -180.0, 180.0, 0.0, 0.5)
 
     st.divider()
-    aa = st.select_slider("Render quality", options=[1, 2, 3], value=2, format_func=lambda x: f"{x}× antialias")
+    aa = st.select_slider(
+        "Render quality",
+        options=[1, 2, 3],
+        value=2,
+        format_func=lambda x: f"{x}× antialias",
+    )
 
 
 params = RenderParams(
@@ -112,11 +139,11 @@ params = RenderParams(
     thinning_strength=float(thinning_strength),
     text=text,
     font_path=font_path,
-    font_size=int(font_size),
+    text_face_fraction=float(text_size_pct) / 100.0,
+    line_spacing=float(line_spacing),
     text_rx_deg=float(text_rx_deg),
     text_ry_deg=float(text_ry_deg),
     text_rz_deg=float(text_rz_deg),
-    line_spacing=float(line_spacing),
     antialias=int(aa),
 )
 
@@ -130,10 +157,10 @@ with left:
 
 with right:
     st.markdown("#### Export")
-    png = image_to_png_bytes(img)
+
     st.download_button(
         "Download PNG",
-        data=png,
+        data=image_to_png_bytes(img),
         file_name="parametric_cube.png",
         mime="image/png",
         use_container_width=True,
@@ -146,12 +173,12 @@ tilt = {tilt_deg:.1f}°
 roll = {roll_deg:.1f}°
 FOV = {fov_deg:.1f}°
 line = {line_thickness:.1f}px
+text = {text_size_pct}% face
 text XYZ = ({text_rx_deg:.1f}°, {text_ry_deg:.1f}°, {text_rz_deg:.1f}°)""",
         language=None,
     )
 
 st.info(
-    "Implementation detail: the text is rendered onto a transparent plane at (0,0,0), "
-    "rotated in X/Y/Z, perspective-projected, and then the 12 cube edges are drawn over it. "
-    "That keeps the wireframe continuous even when a line crosses the text."
+    "The text block is now sized in the same 3D units as the cube. "
+    "Its raster font size is only used internally for sharp rendering."
 )
