@@ -12,6 +12,17 @@ const checks = `
   const flush = () => { while (window.framesToTest.length) window.framesToTest.shift()(); };
   try {
     flush();
+    const panel = document.querySelector('.panel');
+    const previewBeforeScroll = preview.getBoundingClientRect();
+    check(panel.scrollHeight > panel.clientHeight, 'Menu must have its own scroll area');
+    panel.scrollTop = panel.scrollHeight;
+    check(panel.scrollTop > 0, 'Menu did not scroll');
+    const previewAfterScroll = preview.getBoundingClientRect();
+    check(previewBeforeScroll.top === previewAfterScroll.top, 'Menu scrolling moved preview');
+    check(previewAfterScroll.top >= 0 && previewAfterScroll.bottom <= innerHeight,
+      'Preview extends outside the visible viewport');
+    check(document.documentElement.scrollHeight <= innerHeight, 'Page scrolls instead of menu');
+    panel.scrollTop = 0;
     const textCanvas = document.createElement('canvas');
     textCanvas.width = 640; textCanvas.height = 360;
     const textCtx = textCanvas.getContext('2d');
@@ -21,6 +32,13 @@ const checks = `
       return textCanvas.toDataURL();
     };
     state.textRx = 17; state.textRy = -23; state.textRz = 31;
+    state.textTx = 0.3; state.textTy = -0.2; state.textTz = 0.4;
+    const center = projectLocal([0, 0, 0], rotation(17, -23, 31), 640, 360,
+      [state.textTx, state.textTy, state.textTz]);
+    const unrotatedCenter = projectLocal([0, 0, 0], rotation(0, 0, 0), 640, 360,
+      [state.textTx, state.textTy, state.textTz]);
+    check(JSON.stringify(center) === JSON.stringify(unrotatedCenter), 'Rotation changed translation axes');
+    check(center.x > 320 && center.y > 180 && center.z === 5.4, 'Translation direction is incorrect');
     const originalText = textPixels();
     for (const angles of [[50, -40, 22], [-75, 75, -45], [0, 0, 0]]) {
       [state.pan, state.tilt, state.roll] = angles;
@@ -50,7 +68,7 @@ const checks = `
     renderTo(exported.getContext('2d'), 800, 600);
     check(exported.toDataURL().startsWith('data:image/png;base64,'), 'PNG render failed');
     document.body.innerHTML = '<pre>PASS: independent text rotation; ' + count +
-      ' sliders redraw before release; edge-on angles; PNG rendering.</pre>';
+      ' sliders redraw before release; fixed-axis translation; independent menu scrolling; edge-on angles; PNG rendering.</pre>';
   } catch (error) {
     document.body.innerHTML = '<pre>FAIL: ' + error.message + '</pre>';
   }
@@ -67,6 +85,7 @@ try {
   fs.writeFileSync(file, html);
   const result = spawnSync(browser, [
     '--headless', '--no-sandbox', '--disable-gpu', '--no-first-run',
+    '--window-size=' + (process.argv[3] || '1440,900'),
     '--user-data-dir=' + path.join(directory, 'profile'), '--dump-dom',
     'file:///' + file.replaceAll('\\', '/'),
   ], {encoding: 'utf8', timeout: 60000, maxBuffer: 1024 * 1024});

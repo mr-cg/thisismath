@@ -43,6 +43,9 @@ class RenderParams:
     text_rx_deg: float = 0.0
     text_ry_deg: float = 0.0
     text_rz_deg: float = 0.0
+    text_tx: float = 0.0
+    text_ty: float = 0.0
+    text_tz: float = 0.0
     text_world_per_px: float = 0.0040
     line_spacing: float = 1.05
 
@@ -72,9 +75,10 @@ def rotation_matrix(rx_deg=0.0, ry_deg=0.0, rz_deg=0.0):
     return _rz(rz) @ _ry(ry) @ _rx(rx)
 
 
-def project(points, p: RenderParams, object_R):
+def project(points, p: RenderParams, object_R, translation=(0.0, 0.0, 0.0)):
     """Project points after applying ONLY the rotation supplied for that object."""
     pts = (object_R @ points.T).T.copy()
+    pts += np.asarray(translation)
     pts[:, 2] += p.camera_distance
 
     aa = p.antialias
@@ -197,7 +201,7 @@ def render_scene(p: RenderParams):
         [-hw, -hh, 0],
     ], float)
 
-    text_quad, _ = project(plane, p, text_R)
+    text_quad, _ = project(plane, p, text_R, (p.text_tx, p.text_ty, p.text_tz))
     # An edge-on text plane has no visible area and no invertible homography.
     area = 0.5 * abs(np.dot(text_quad[:, 0], np.roll(text_quad[:, 1], 1))
                      - np.dot(text_quad[:, 1], np.roll(text_quad[:, 0], 1)))
