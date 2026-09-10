@@ -198,7 +198,11 @@ def render_scene(p: RenderParams):
     ], float)
 
     text_quad, _ = project(plane, p, text_R)
-    canvas = Image.alpha_composite(canvas, _warp(tex, text_quad, (W, H)))
+    # An edge-on text plane has no visible area and no invertible homography.
+    area = 0.5 * abs(np.dot(text_quad[:, 0], np.roll(text_quad[:, 1], 1))
+                     - np.dot(text_quad[:, 1], np.roll(text_quad[:, 0], 1)))
+    if area > 1e-6:
+        canvas = Image.alpha_composite(canvas, _warp(tex, text_quad, (W, H)))
 
     # CUBE: independent cube_R. Draw AFTER text to keep lines continuous.
     verts = cube_vertices(p.cube_scale)

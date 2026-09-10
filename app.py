@@ -20,5 +20,5 @@ html_path = Path(__file__).with_name("live_cube.html")
 components.html(
     html_path.read_text(encoding="utf-8"),
     height=1180,
-    scrolling=False,
+    scrolling=True,
 )

@@ -233,11 +233,7 @@ MATH</textarea>
       <button class="primary" id="downloadBtn">Download PNG</button>
     </div>
 
-    <div class="note">
-      Native Streamlit sliders wait for the interaction to finish before Python receives the value.
-      This version deliberately renders in JavaScript, so the canvas updates on every browser
-      <code>input</code> event while you drag.
-    </div>
+    <div class="note">Drag a slider to preview changes immediately. Text angles stay fixed when you rotate the cube.</div>
   </div>
 
   <div class="previewWrap">
@@ -532,6 +528,7 @@ MATH</textarea>
   function bindSlider(key) {
     const [id,outId,fmt] = controls[key];
     const el=$(id), out=$(outId);
+    el.previousElementSibling.querySelector('label').htmlFor = id;
     const sync = () => {
       state[key]=Number(el.value);
       out.value=fmt(el.value);
@@ -572,6 +569,7 @@ MATH</textarea>
   $("resetBtn").addEventListener("click", () => {
     Object.assign(state, defaults);
     customFontFamily=null;
+    $("fontFile").value="";
     $("text").value=defaults.text;
     $("fontFamily").value=defaults.fontFamily;
     for (const key of Object.keys(controls)) {
