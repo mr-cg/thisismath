@@ -487,13 +487,21 @@ MATH</textarea>
     const pixels = ctx.getImageData(0, 0, w, h).data;
     const ink = (x, y) => x >= 0 && y >= 0 && x < w && y < h && pixels[(y*w+x)*4+3] >= 128;
     const edges = [];
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-      if (!ink(x, y)) continue;
-      const edge = (a, b, normal) => edges.push({a: [a[0]/w, a[1]/h], b: [b[0]/w, b[1]/h], normal});
-      if (!ink(x, y-1)) edge([x,y], [x+1,y], [0,1,0]);
-      if (!ink(x, y+1)) edge([x+1,y+1], [x,y+1], [0,-1,0]);
-      if (!ink(x-1, y)) edge([x,y+1], [x,y], [-1,0,0]);
-      if (!ink(x+1, y)) edge([x+1,y], [x+1,y+1], [1,0,0]);
+    const edge = (a, b, normal) => edges.push({a: [a[0]/w, a[1]/h], b: [b[0]/w, b[1]/h], normal});
+    // Merge straight boundary runs into single walls to avoid seams and excess draw calls.
+    for (let y = 0; y <= h; y++) for (let x = 0; x < w;) {
+      const sign = Number(ink(x,y-1)) - Number(ink(x,y));
+      if (!sign) { x++; continue; }
+      const start = x++;
+      while (x < w && Number(ink(x,y-1)) - Number(ink(x,y)) === sign) x++;
+      edge([start,y], [x,y], [0,-sign,0]);
+    }
+    for (let x = 0; x <= w; x++) for (let y = 0; y < h;) {
+      const sign = Number(ink(x-1,y)) - Number(ink(x,y));
+      if (!sign) { y++; continue; }
+      const start = y++;
+      while (y < h && Number(ink(x-1,y)) - Number(ink(x,y)) === sign) y++;
+      edge([x,start], [x,y], [sign,0,0]);
     }
     texObj.outline = edges;
     return edges;
