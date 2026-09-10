@@ -1,0 +1,606 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #fff;
+    color: #111;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  .app {
+    display: grid;
+    grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+    gap: 18px;
+    width: 100%;
+  }
+  .panel {
+    border: 1px solid #ddd;
+    border-radius: 12px;
+    padding: 14px;
+    background: #fafafa;
+    height: 1080px;
+    overflow-y: auto;
+  }
+  .previewWrap {
+    min-width: 0;
+  }
+  canvas#preview {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 12px;
+  }
+  h3 {
+    margin: 15px 0 8px;
+    font-size: 15px;
+  }
+  h3:first-child { margin-top: 0; }
+  .control { margin: 10px 0 12px; }
+  .labelRow {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 4px;
+    font-size: 13px;
+  }
+  output {
+    min-width: 60px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-weight: 650;
+  }
+  input[type=range] {
+    width: 100%;
+    margin: 0;
+    cursor: ew-resize;
+  }
+  textarea, select, input[type=number], input[type=file] {
+    width: 100%;
+    border: 1px solid #ccc;
+    border-radius: 7px;
+    padding: 7px 8px;
+    background: white;
+    color: #111;
+  }
+  textarea { min-height: 88px; resize: vertical; }
+  .two {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .buttonRow {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+  button {
+    border: 1px solid #bbb;
+    border-radius: 8px;
+    padding: 8px 11px;
+    background: white;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  button.primary {
+    background: #111;
+    color: white;
+    border-color: #111;
+  }
+  .note {
+    margin-top: 10px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: #555;
+  }
+  .badge {
+    display: inline-block;
+    border-radius: 999px;
+    background: #e8f5e9;
+    color: #186a2e;
+    font-weight: 700;
+    font-size: 11px;
+    padding: 3px 7px;
+    margin-left: 5px;
+  }
+  @media (max-width: 850px) {
+    .app { grid-template-columns: 1fr; }
+    .panel { height: auto; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="panel">
+    <h3>Cube / camera <span class="badge">LIVE</span></h3>
+
+    <div class="control">
+      <div class="labelRow"><label>Cube size</label><output id="cubeScaleOut"></output></div>
+      <input id="cubeScale" type="range" min="0.4" max="1.6" step="0.01" value="1">
+    </div>
+
+    <div class="control">
+      <div class="labelRow"><label>Pan / yaw</label><output id="panOut"></output></div>
+      <input id="pan" type="range" min="-75" max="75" step="0.5" value="-25">
+    </div>
+
+    <div class="control">
+      <div class="labelRow"><label>Tilt / pitch</label><output id="tiltOut"></output></div>
+      <input id="tilt" type="range" min="-75" max="75" step="0.5" value="18">
+    </div>
+
+    <div class="control">
+      <div class="labelRow"><label>Roll</label><output id="rollOut"></output></div>
+      <input id="roll" type="range" min="-45" max="45" step="0.5" value="0">
+    </div>
+
+    <div class="control">
+      <div class="labelRow"><label>Camera distance</label><output id="cameraDistanceOut"></output></div>
+      <input id="cameraDistance" type="range" min="3" max="10" step="0.05" value="5">
+    </div>
+
+    <div class="control">
+      <div class="labelRow"><label>Perspective / FOV</label><output id="fovOut"></output></div>
+      <input id="fov" type="range" min="15" max="80" step="0.5" value="38">
+    </div>
+
+    <h3>Wireframe <span class="badge">LIVE</span></h3>
+
+    <div class="control">
+      <div class="labelRow"><label>Line thickness</label><output id="lineThicknessOut"></output></div>
+      <input id="lineThickness" type="range" min="1" max="30" step="0.5" value="8">
+    </div>
+
+    <div class="control">
+      <div class="labelRow"><label>Perspective thinning</label><output id="thinningOut"></output></div>
+      <input id="thinning" type="range" min="0" max="2" step="0.05" value="0.75">
+    </div>
+
+    <h3>Text</h3>
+
+    <div class="control">
+      <label style="font-size:13px">Text</label>
+      <textarea id="text">THIS
+IS
+MATH</textarea>
+    </div>
+
+    <div class="control">
+      <label style="font-size:13px">Font</label>
+      <select id="fontFamily">
+        <option value="Arial, Helvetica, sans-serif">Arial / Helvetica</option>
+        <option value="'Arial Black', Arial, sans-serif">Arial Black</option>
+        <option value="Impact, sans-serif">Impact</option>
+        <option value="Verdana, sans-serif">Verdana</option>
+        <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
+        <option value="Georgia, serif">Georgia</option>
+        <option value="'Times New Roman', serif">Times New Roman</option>
+        <option value="'Courier New', monospace">Courier New</option>
+        <option value="system-ui, sans-serif">System UI</option>
+      </select>
+    </div>
+
+    <div class="control">
+      <label style="font-size:13px">Load local .ttf / .otf font</label>
+      <input id="fontFile" type="file" accept=".ttf,.otf,font/ttf,font/otf">
+    </div>
+
+    <div class="control">
+      <div class="labelRow"><label>Font size</label><output id="fontSizeOut"></output></div>
+      <input id="fontSize" type="range" min="12" max="220" step="1" value="92">
+    </div>
+
+    <div class="control">
+      <div class="labelRow"><label>Line spacing</label><output id="lineSpacingOut"></output></div>
+      <input id="lineSpacing" type="range" min="0.75" max="1.8" step="0.01" value="1.05">
+    </div>
+
+    <h3>Absolute text rotation <span class="badge">LIVE</span></h3>
+    <div class="note" style="margin-top:-3px;margin-bottom:8px">
+      These angles are camera/world absolute. Rotating the cube does not rotate the text.
+    </div>
+
+    <div class="control">
+      <div class="labelRow"><label>Text X</label><output id="textRxOut"></output></div>
+      <input id="textRx" type="range" min="-90" max="90" step="0.5" value="0">
+    </div>
+
+    <div class="control">
+      <div class="labelRow"><label>Text Y</label><output id="textRyOut"></output></div>
+      <input id="textRy" type="range" min="-90" max="90" step="0.5" value="0">
+    </div>
+
+    <div class="control">
+      <div class="labelRow"><label>Text Z</label><output id="textRzOut"></output></div>
+      <input id="textRz" type="range" min="-180" max="180" step="0.5" value="0">
+    </div>
+
+    <h3>PNG export</h3>
+    <div class="two">
+      <div><label style="font-size:12px">Width</label><input id="exportW" type="number" min="400" max="4096" value="1920"></div>
+      <div><label style="font-size:12px">Height</label><input id="exportH" type="number" min="400" max="4096" value="1080"></div>
+    </div>
+
+    <div class="buttonRow">
+      <button id="resetBtn">Reset</button>
+      <button class="primary" id="downloadBtn">Download PNG</button>
+    </div>
+
+    <div class="note">
+      Native Streamlit sliders wait for the interaction to finish before Python receives the value.
+      This version deliberately renders in JavaScript, so the canvas updates on every browser
+      <code>input</code> event while you drag.
+    </div>
+  </div>
+
+  <div class="previewWrap">
+    <canvas id="preview" width="1280" height="720"></canvas>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const preview = $("preview");
+  const pctx = preview.getContext("2d", { alpha: false });
+
+  const defaults = {
+    cubeScale: 1,
+    pan: -25,
+    tilt: 18,
+    roll: 0,
+    cameraDistance: 5,
+    fov: 38,
+    lineThickness: 8,
+    thinning: 0.75,
+    text: "THIS\nIS\nMATH",
+    fontFamily: "Arial, Helvetica, sans-serif",
+    fontSize: 92,
+    lineSpacing: 1.05,
+    textRx: 0,
+    textRy: 0,
+    textRz: 0
+  };
+
+  const state = { ...defaults };
+  let customFontFamily = null;
+  let textTextureCache = null;
+  let textTextureKey = "";
+  let rafPending = false;
+
+  function deg(v) { return v * Math.PI / 180; }
+
+  function matMul(A, B) {
+    const C = [[0,0,0],[0,0,0],[0,0,0]];
+    for (let r=0;r<3;r++)
+      for (let c=0;c<3;c++)
+        for (let k=0;k<3;k++)
+          C[r][c] += A[r][k] * B[k][c];
+    return C;
+  }
+
+  function matVec(A, v) {
+    return [
+      A[0][0]*v[0] + A[0][1]*v[1] + A[0][2]*v[2],
+      A[1][0]*v[0] + A[1][1]*v[1] + A[1][2]*v[2],
+      A[2][0]*v[0] + A[2][1]*v[1] + A[2][2]*v[2]
+    ];
+  }
+
+  function Rx(a) {
+    const c=Math.cos(a), s=Math.sin(a);
+    return [[1,0,0],[0,c,-s],[0,s,c]];
+  }
+  function Ry(a) {
+    const c=Math.cos(a), s=Math.sin(a);
+    return [[c,0,s],[0,1,0],[-s,0,c]];
+  }
+  function Rz(a) {
+    const c=Math.cos(a), s=Math.sin(a);
+    return [[c,-s,0],[s,c,0],[0,0,1]];
+  }
+  function rotation(rxDeg, ryDeg, rzDeg) {
+    return matMul(Rz(deg(rzDeg)), matMul(Ry(deg(ryDeg)), Rx(deg(rxDeg))));
+  }
+
+  function projectLocal(localPoint, objectR, W, H) {
+    // Critical behavior:
+    // cube points are projected with cubeR;
+    // text points are projected with textR;
+    // textR never inherits cubeR.
+    const q = matVec(objectR, localPoint);
+    const z = q[2] + state.cameraDistance;
+    const f = (H * 0.5) / Math.tan(deg(state.fov) * 0.5);
+    return {
+      x: W*0.5 + f*q[0]/z,
+      y: H*0.5 - f*q[1]/z,
+      z
+    };
+  }
+
+  function cubeVertices(s) {
+    const v = [];
+    for (const x of [-s,s])
+      for (const y of [-s,s])
+        for (const z of [-s,s])
+          v.push([x,y,z]);
+    return v;
+  }
+
+  const EDGES = (() => {
+    const signs = [
+      [-1,-1,-1],[-1,-1,1],[-1,1,-1],[-1,1,1],
+      [1,-1,-1],[1,-1,1],[1,1,-1],[1,1,1]
+    ];
+    const e = [];
+    for (let i=0;i<8;i++) {
+      for (let j=i+1;j<8;j++) {
+        let d=0;
+        for (let k=0;k<3;k++) if (signs[i][k] !== signs[j][k]) d++;
+        if (d===1) e.push([i,j]);
+      }
+    }
+    return e;
+  })();
+
+  function currentFont() {
+    return customFontFamily ? `"${customFontFamily}"` : state.fontFamily;
+  }
+
+  function makeTextTexture() {
+    const scale = 2;
+    const key = [
+      state.text, currentFont(), state.fontSize, state.lineSpacing
+    ].join("|");
+    if (textTextureCache && key === textTextureKey) return textTextureCache;
+
+    const lines = state.text.split("\n");
+    const tmp = document.createElement("canvas");
+    const ctx = tmp.getContext("2d");
+    const fontPx = state.fontSize * scale;
+    ctx.font = `700 ${fontPx}px ${currentFont()}`;
+    ctx.textBaseline = "alphabetic";
+
+    let maxW = 1;
+    for (const line of lines) maxW = Math.max(maxW, ctx.measureText(line || " ").width);
+
+    const lineH = fontPx * 1.08;
+    const step = lineH * state.lineSpacing;
+    const pad = Math.max(20, fontPx * 0.18);
+    tmp.width = Math.ceil(maxW + 2*pad);
+    tmp.height = Math.ceil(lineH + Math.max(0, lines.length-1)*step + 2*pad);
+
+    const d = tmp.getContext("2d");
+    d.clearRect(0,0,tmp.width,tmp.height);
+    d.fillStyle = "#000";
+    d.font = `700 ${fontPx}px ${currentFont()}`;
+    d.textAlign = "center";
+    d.textBaseline = "middle";
+
+    let y0 = pad + lineH*0.5;
+    lines.forEach((line, i) => {
+      d.fillText(line, tmp.width/2, y0 + i*step);
+    });
+
+    textTextureKey = key;
+    textTextureCache = { canvas: tmp, scale };
+    return textTextureCache;
+  }
+
+  function affineForTriangles(s0,s1,s2,d0,d1,d2) {
+    const x0=s0.x,y0=s0.y,x1=s1.x,y1=s1.y,x2=s2.x,y2=s2.y;
+    const den = x0*(y1-y2)+x1*(y2-y0)+x2*(y0-y1);
+    if (Math.abs(den) < 1e-9) return null;
+
+    const ax = (d0.x*(y1-y2)+d1.x*(y2-y0)+d2.x*(y0-y1))/den;
+    const cx = (d0.x*(x2-x1)+d1.x*(x0-x2)+d2.x*(x1-x0))/den;
+    const ex = (d0.x*(x1*y2-x2*y1)+d1.x*(x2*y0-x0*y2)+d2.x*(x0*y1-x1*y0))/den;
+
+    const ay = (d0.y*(y1-y2)+d1.y*(y2-y0)+d2.y*(y0-y1))/den;
+    const cy = (d0.y*(x2-x1)+d1.y*(x0-x2)+d2.y*(x1-x0))/den;
+    const ey = (d0.y*(x1*y2-x2*y1)+d1.y*(x2*y0-x0*y2)+d2.y*(x0*y1-x1*y0))/den;
+
+    return [ax, ay, cx, cy, ex, ey];
+  }
+
+  function drawImageTriangle(ctx, img, s0,s1,s2,d0,d1,d2) {
+    const t = affineForTriangles(s0,s1,s2,d0,d1,d2);
+    if (!t) return;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(d0.x,d0.y);
+    ctx.lineTo(d1.x,d1.y);
+    ctx.lineTo(d2.x,d2.y);
+    ctx.closePath();
+    ctx.clip();
+
+    ctx.setTransform(t[0],t[1],t[2],t[3],t[4],t[5]);
+    ctx.drawImage(img,0,0);
+    ctx.restore();
+  }
+
+  function drawTextPlane(ctx, W, H) {
+    const texObj = makeTextTexture();
+    const tex = texObj.canvas;
+    const texScale = texObj.scale;
+
+    // font-size is a true size control in 3D world units
+    const worldPerCssPx = 0.004;
+    const halfW = (tex.width / texScale) * worldPerCssPx * 0.5;
+    const halfH = (tex.height / texScale) * worldPerCssPx * 0.5;
+
+    // ABSOLUTE text rotation — independent from cube pan/tilt/roll.
+    const textR = rotation(state.textRx, state.textRy, state.textRz);
+
+    const cols = 14;
+    const rows = Math.max(4, Math.round(cols * tex.height / Math.max(tex.width,1)));
+
+    function point(u,v) {
+      const local = [
+        -halfW + 2*halfW*u,
+         halfH - 2*halfH*v,
+         0
+      ];
+      return projectLocal(local, textR, W, H);
+    }
+
+    for (let iy=0; iy<rows; iy++) {
+      const v0=iy/rows, v1=(iy+1)/rows;
+      for (let ix=0; ix<cols; ix++) {
+        const u0=ix/cols, u1=(ix+1)/cols;
+
+        const d00=point(u0,v0), d10=point(u1,v0), d11=point(u1,v1), d01=point(u0,v1);
+        const s00={x:u0*tex.width,y:v0*tex.height};
+        const s10={x:u1*tex.width,y:v0*tex.height};
+        const s11={x:u1*tex.width,y:v1*tex.height};
+        const s01={x:u0*tex.width,y:v1*tex.height};
+
+        drawImageTriangle(ctx,tex,s00,s10,s11,d00,d10,d11);
+        drawImageTriangle(ctx,tex,s00,s11,s01,d00,d11,d01);
+      }
+    }
+  }
+
+  function renderTo(ctx, W, H) {
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle="#fff";
+    ctx.fillRect(0,0,W,H);
+
+    // Draw text first so the wireframe is never interrupted by the text.
+    drawTextPlane(ctx,W,H);
+
+    const cubeR = rotation(state.tilt, state.pan, state.roll);
+    const verts = cubeVertices(state.cubeScale);
+    const pts = verts.map(v => projectLocal(v,cubeR,W,H));
+
+    const edges = EDGES.map(([i,j]) => ({
+      i,j,z:(pts[i].z+pts[j].z)*0.5
+    })).sort((a,b) => b.z-a.z); // far -> near
+
+    ctx.strokeStyle="#000";
+    ctx.lineCap="round";
+    ctx.lineJoin="round";
+
+    const outputScale = H / 900;
+    for (const e of edges) {
+      const ratio = state.cameraDistance / Math.max(e.z,0.001);
+      ctx.lineWidth = Math.max(
+        0.75,
+        state.lineThickness * outputScale * Math.pow(ratio,state.thinning)
+      );
+      ctx.beginPath();
+      ctx.moveTo(pts[e.i].x,pts[e.i].y);
+      ctx.lineTo(pts[e.j].x,pts[e.j].y);
+      ctx.stroke();
+    }
+  }
+
+  function scheduleRender() {
+    if (rafPending) return;
+    rafPending = true;
+    requestAnimationFrame(() => {
+      rafPending = false;
+      renderTo(pctx, preview.width, preview.height);
+    });
+  }
+
+  const controls = {
+    cubeScale: ["cubeScale","cubeScaleOut", v => Number(v).toFixed(2)],
+    pan: ["pan","panOut", v => `${Number(v).toFixed(1)}°`],
+    tilt: ["tilt","tiltOut", v => `${Number(v).toFixed(1)}°`],
+    roll: ["roll","rollOut", v => `${Number(v).toFixed(1)}°`],
+    cameraDistance: ["cameraDistance","cameraDistanceOut", v => Number(v).toFixed(2)],
+    fov: ["fov","fovOut", v => `${Number(v).toFixed(1)}°`],
+    lineThickness: ["lineThickness","lineThicknessOut", v => `${Number(v).toFixed(1)} px`],
+    thinning: ["thinning","thinningOut", v => Number(v).toFixed(2)],
+    fontSize: ["fontSize","fontSizeOut", v => `${Number(v).toFixed(0)} px`],
+    lineSpacing: ["lineSpacing","lineSpacingOut", v => Number(v).toFixed(2)],
+    textRx: ["textRx","textRxOut", v => `${Number(v).toFixed(1)}°`],
+    textRy: ["textRy","textRyOut", v => `${Number(v).toFixed(1)}°`],
+    textRz: ["textRz","textRzOut", v => `${Number(v).toFixed(1)}°`]
+  };
+
+  function bindSlider(key) {
+    const [id,outId,fmt] = controls[key];
+    const el=$(id), out=$(outId);
+    const sync = () => {
+      state[key]=Number(el.value);
+      out.value=fmt(el.value);
+      if (key==="fontSize" || key==="lineSpacing") textTextureKey="";
+      scheduleRender();
+    };
+    el.addEventListener("input",sync);   // live WHILE dragging
+    sync();
+  }
+  Object.keys(controls).forEach(bindSlider);
+
+  $("text").addEventListener("input", e => {
+    state.text=e.target.value;
+    textTextureKey="";
+    scheduleRender();
+  });
+
+  $("fontFamily").addEventListener("change", e => {
+    customFontFamily=null;
+    state.fontFamily=e.target.value;
+    textTextureKey="";
+    scheduleRender();
+  });
+
+  $("fontFile").addEventListener("change", async e => {
+    const file=e.target.files && e.target.files[0];
+    if (!file) return;
+    const buf=await file.arrayBuffer();
+    const family=`UserFont_${Date.now()}`;
+    const face=new FontFace(family,buf);
+    await face.load();
+    document.fonts.add(face);
+    customFontFamily=family;
+    textTextureKey="";
+    scheduleRender();
+  });
+
+  $("resetBtn").addEventListener("click", () => {
+    Object.assign(state, defaults);
+    customFontFamily=null;
+    $("text").value=defaults.text;
+    $("fontFamily").value=defaults.fontFamily;
+    for (const key of Object.keys(controls)) {
+      const [id,outId,fmt]=controls[key];
+      $(id).value=defaults[key];
+      $(outId).value=fmt(defaults[key]);
+    }
+    textTextureKey="";
+    scheduleRender();
+  });
+
+  $("downloadBtn").addEventListener("click", () => {
+    const W=Math.max(400,Math.min(4096,Number($("exportW").value)||1920));
+    const H=Math.max(400,Math.min(4096,Number($("exportH").value)||1080));
+    const c=document.createElement("canvas");
+    c.width=W; c.height=H;
+    const ctx=c.getContext("2d",{alpha:false});
+    renderTo(ctx,W,H);
+    c.toBlob(blob => {
+      const a=document.createElement("a");
+      a.href=URL.createObjectURL(blob);
+      a.download="parametric_cube.png";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+    },"image/png");
+  });
+
+  scheduleRender();
+})();
+</script>
+</body>
+</html>

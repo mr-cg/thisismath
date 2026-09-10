@@ -1,28 +1,70 @@
-# Parametric Cube Wireframe + 3D Text — v3
 
-This revision fixes two deployment issues.
+# Parametric Cube Wireframe + Absolute 3D Text — V2
 
-## Font discovery on Streamlit Cloud
+This version fixes the two interaction/geometry issues:
 
-The previous version only used `font_manager.findSystemFonts()`. Streamlit Community Cloud may expose very few OS fonts, so the selector could collapse to only `Default Bold`.
+## 1. Text rotation is absolute
 
-v3 also scans Matplotlib's own bundled font directory:
+Cube rotation and text rotation now use independent rotation matrices.
+
+Conceptually:
 
 ```python
-Path(matplotlib.get_data_path()) / "fonts" / "ttf"
+cube_R = rotation_matrix(cube_tilt, cube_pan, cube_roll)
+text_R = rotation_matrix(text_x, text_y, text_z)
+
+cube_2d = project(cube_points, cube_R)
+text_2d = project(text_points, text_R)
 ```
 
-That normally provides DejaVu and STIX families in the deployed Python environment. The app also scans an optional `./fonts` folder in your repo and lets you upload a `.ttf` or `.otf` from the sidebar.
+There is deliberately **no**:
 
-No font files are included in this ZIP.
+```python
+text_R = cube_R @ text_R
+```
 
-## Text sizing
+So changing cube pan, tilt, or roll does not change the text orientation.
 
-The renderer now crops the text texture to the actual alpha/ink bounds before scaling the 3D text plane. So `80% of cube face` is based on the visible lettering, not transparent padding around it.
+## 2. Sliders are genuinely live while dragging
+
+Native `st.slider()` values are sent from the browser to Python as Streamlit widget
+interactions; they are not designed as a 60-fps graphics control.
+
+V2 moves the interactive preview and its sliders into a browser-side HTML/JavaScript
+component. Each range input listens to the browser's `input` event and redraws through
+`requestAnimationFrame`.
+
+That means the cube/text visibly rotate **during the drag**, not only after mouse-up.
+
+## Other behavior
+
+- Black wireframe on white.
+- Wireframe is drawn after the text, so lines remain continuous through the text.
+- Depth-based line thinning.
+- Perspective/FOV and camera-distance controls.
+- Absolute X/Y/Z text rotation.
+- Local `.ttf` / `.otf` font loading.
+- Client-side high-resolution PNG export.
+- No JavaScript package build step is required.
 
 ## Run
 
 ```bash
+python -m venv .venv
+
+# Windows
+.venv\Scripts\activate
+
+# macOS / Linux
+source .venv/bin/activate
+
 pip install -r requirements.txt
 streamlit run app.py
 ```
+
+## Files
+
+- `app.py` — tiny Streamlit shell.
+- `live_cube.html` — all live controls and browser-side rendering.
+- `renderer.py` — optional Python/Pillow reference renderer with the same absolute-text fix.
+- `requirements.txt`
