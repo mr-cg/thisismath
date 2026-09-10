@@ -14,6 +14,14 @@ const checks = `
     flush();
     const panel = document.querySelector('.panel');
     const previewBeforeScroll = preview.getBoundingClientRect();
+    const panelBounds = panel.getBoundingClientRect();
+    check(Math.abs(panelBounds.height - previewBeforeScroll.height) < 1,
+      'Slider menu and cube preview must have the same height');
+    if (innerWidth > 850) {
+      check(Math.abs(panelBounds.top - previewBeforeScroll.top) < 1 &&
+        Math.abs(panelBounds.bottom - previewBeforeScroll.bottom) < 1,
+        'Menu and preview must align at both top and bottom');
+    }
     check(panel.scrollHeight > panel.clientHeight, 'Menu must have its own scroll area');
     panel.scrollTop = panel.scrollHeight;
     check(panel.scrollTop > 0, 'Menu did not scroll');
