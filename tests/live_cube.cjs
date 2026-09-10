@@ -28,7 +28,7 @@ const checks = `
     const textCtx = textCanvas.getContext('2d');
     const textPixels = () => {
       textCtx.clearRect(0, 0, 640, 360);
-      drawTextPlane(textCtx, 640, 360);
+      drawText(textCtx, 640, 360);
       return textCanvas.toDataURL();
     };
     state.textRx = 17; state.textRy = -23; state.textRz = 31;
@@ -47,8 +47,35 @@ const checks = `
     state.textRz += 15;
     check(textPixels() !== originalText, 'Absolute text rotation did not change text');
     $('resetBtn').click(); flush();
+    const independent = textPixels();
+    $('followCube').click(); flush();
+    check(state.followCube && textPixels() !== independent, 'Follow toggle did not attach text to cube');
+    const attached = textPixels();
+    state.pan += 30;
+    check(textPixels() !== attached, 'Attached text did not follow cube rotation');
+    $('followCube').click(); flush();
+    check(textPixels() === independent, 'Turning follow off did not restore absolute text');
+    state.textTx = 0.5;
+    $('followCube').click(); flush();
+    const expectedPosition = matVec(rotation(state.tilt, state.pan, state.roll), [0.5,0,0]);
+    check(JSON.stringify(textTransform().position) === JSON.stringify(expectedPosition), 'Attached text position did not orbit cube');
+    $('resetBtn').click(); flush();
+    state.textRy = 35;
+    const flat = textPixels();
+    $('text3d').click(); flush();
+    check(state.text3d && !$('depthControl').hidden, '3D toggle did not expose thickness');
+    check(textPixels() !== flat, '3D text did not add visible sides');
+    state.textRy = 90;
+    textPixels();
+    check(textCtx.getImageData(0,0,640,360).data.some((value, i) => i%4 === 3 && value > 0), 'Edge-on 3D text has no visible thickness');
+    state.textRy = 35;
+    $('text3d').click(); flush();
+    check(textPixels() === flat, 'Turning 3D off did not restore flat text');
+    $('resetBtn').click(); flush();
+    check(!state.text3d && !state.followCube && $('depthControl').hidden, 'Reset did not clear toggles');
     let count = 0;
     for (const key of Object.keys(controls)) {
+      if (key === 'textDepth') { $('text3d').click(); state.textRy = 35; scheduleRender(); flush(); }
       const input = $(controls[key][0]);
       const before = preview.toDataURL();
       input.dispatchEvent(new PointerEvent('pointerdown', {buttons: 1}));
@@ -68,7 +95,7 @@ const checks = `
     renderTo(exported.getContext('2d'), 800, 600);
     check(exported.toDataURL().startsWith('data:image/png;base64,'), 'PNG render failed');
     document.body.innerHTML = '<pre>PASS: independent text rotation; ' + count +
-      ' sliders redraw before release; fixed-axis translation; independent menu scrolling; edge-on angles; PNG rendering.</pre>';
+      ' sliders redraw before release; follow toggle; 3D thickness and edge-on sides; reset; fixed-axis translation; independent menu scrolling; PNG rendering.</pre>';
   } catch (error) {
     document.body.innerHTML = '<pre>FAIL: ' + error.message + '</pre>';
   }

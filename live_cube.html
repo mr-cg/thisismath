@@ -74,6 +74,8 @@
     margin: 0;
     cursor: ew-resize;
   }
+  .toggle { display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer; }
+  .toggle input { width: 36px; height: 20px; accent-color: #111; cursor: pointer; }
   textarea, select, input[type=number], input[type=file] {
     width: 100%;
     border: 1px solid #ccc;
@@ -216,10 +218,15 @@ MATH</textarea>
       <input id="lineSpacing" type="range" min="0.75" max="1.8" step="0.01" value="1.05">
     </div>
 
-    <h3>Absolute text rotation <span class="badge">LIVE</span></h3>
-    <div class="note" style="margin-top:-3px;margin-bottom:8px">
-      These angles are camera/world absolute. Rotating the cube does not rotate the text.
+    <div class="control"><label class="toggle"><input id="followCube" type="checkbox" role="switch">Text follows cube</label></div>
+    <div class="control"><label class="toggle"><input id="text3d" type="checkbox" role="switch">3D text</label></div>
+    <div class="control" id="depthControl" hidden>
+      <div class="labelRow"><label>Text thickness</label><output id="textDepthOut"></output></div>
+      <input id="textDepth" type="range" min="0.02" max="0.8" step="0.01" value="0.2">
+      <div class="note">Depth in scene units. Rotate the text to see its sides.</div>
     </div>
+    <h3>Text rotation <span class="badge">LIVE</span></h3>
+    <div class="note" id="rotationNote" style="margin-top:-3px;margin-bottom:8px"></div>
 
     <div class="control">
       <div class="labelRow"><label>Text X</label><output id="textRxOut"></output></div>
@@ -237,7 +244,7 @@ MATH</textarea>
     </div>
 
     <h3>Text position <span class="badge">LIVE</span></h3>
-    <div class="note">Position in fixed scene axes: X moves right, Y moves up, and Z moves away from the camera. One unit is half the default cube edge.</div>
+    <div class="note" id="positionNote"></div>
     <div class="control">
       <div class="labelRow"><label>Text position X</label><output id="textTxOut"></output></div>
       <input id="textTx" type="range" min="-2" max="2" step="0.01" value="0">
@@ -262,7 +269,7 @@ MATH</textarea>
       <button class="primary" id="downloadBtn">Download PNG</button>
     </div>
 
-    <div class="note">Drag a slider to preview changes immediately. Text angles stay fixed when you rotate the cube.</div>
+    <div class="note">Drag a slider or change a toggle to preview changes immediately.</div>
   </div>
 
   <div class="previewWrap">
@@ -294,7 +301,10 @@ MATH</textarea>
     textRz: 0,
     textTx: 0,
     textTy: 0,
-    textTz: 0
+    textTz: 0,
+    followCube: false,
+    text3d: false,
+    textDepth: 0.2
   };
 
   const state = { ...defaults };
@@ -339,10 +349,7 @@ MATH</textarea>
   }
 
   function projectLocal(localPoint, objectR, W, H, translation = [0, 0, 0]) {
-    // Critical behavior:
-    // cube points are projected with cubeR;
-    // text points are projected with textR;
-    // textR never inherits cubeR.
+    // Each object supplies its own rotation and position.
     const q = matVec(objectR, localPoint);
     // Translate after rotation so position controls stay on fixed scene axes.
     for (let i = 0; i < 3; i++) q[i] += translation[i];
@@ -457,7 +464,42 @@ MATH</textarea>
     ctx.restore();
   }
 
-  function drawTextPlane(ctx, W, H) {
+  function textTransform() {
+    let R = rotation(state.textRx, state.textRy, state.textRz);
+    let position = [state.textTx, state.textTy, state.textTz];
+    if (state.followCube) {
+      const cubeR = rotation(state.tilt, state.pan, state.roll);
+      R = matMul(cubeR, R);
+      position = matVec(cubeR, position);
+    }
+    return {R, position};
+  }
+
+  // Cache the glyph silhouette, including the boundaries of holes in letters.
+  function textOutline(texObj) {
+    if (texObj.outline) return texObj.outline;
+    const mask = document.createElement('canvas');
+    const scale = Math.min(1, 360 / Math.max(texObj.canvas.width, texObj.canvas.height));
+    const w = mask.width = Math.max(1, Math.round(texObj.canvas.width * scale));
+    const h = mask.height = Math.max(1, Math.round(texObj.canvas.height * scale));
+    const ctx = mask.getContext('2d', {willReadFrequently: true});
+    ctx.drawImage(texObj.canvas, 0, 0, w, h);
+    const pixels = ctx.getImageData(0, 0, w, h).data;
+    const ink = (x, y) => x >= 0 && y >= 0 && x < w && y < h && pixels[(y*w+x)*4+3] >= 128;
+    const edges = [];
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      if (!ink(x, y)) continue;
+      const edge = (a, b, normal) => edges.push({a: [a[0]/w, a[1]/h], b: [b[0]/w, b[1]/h], normal});
+      if (!ink(x, y-1)) edge([x,y], [x+1,y], [0,1,0]);
+      if (!ink(x, y+1)) edge([x+1,y+1], [x,y+1], [0,-1,0]);
+      if (!ink(x-1, y)) edge([x,y+1], [x,y], [-1,0,0]);
+      if (!ink(x+1, y)) edge([x+1,y], [x+1,y+1], [1,0,0]);
+    }
+    texObj.outline = edges;
+    return edges;
+  }
+
+  function drawTextPlane(ctx, W, H, depth = 0) {
     const texObj = makeTextTexture();
     const tex = texObj.canvas;
     const texScale = texObj.scale;
@@ -467,8 +509,7 @@ MATH</textarea>
     const halfW = (tex.width / texScale) * worldPerCssPx * 0.5;
     const halfH = (tex.height / texScale) * worldPerCssPx * 0.5;
 
-    // ABSOLUTE text rotation — independent from cube pan/tilt/roll.
-    const textR = rotation(state.textRx, state.textRy, state.textRz);
+    const {R: textR, position} = textTransform();
 
     const cols = 14;
     const rows = Math.max(4, Math.round(cols * tex.height / Math.max(tex.width,1)));
@@ -477,9 +518,9 @@ MATH</textarea>
       const local = [
         -halfW + 2*halfW*u,
          halfH - 2*halfH*v,
-         0
+         depth
       ];
-      return projectLocal(local, textR, W, H, [state.textTx, state.textTy, state.textTz]);
+      return projectLocal(local, textR, W, H, position);
     }
 
     for (let iy=0; iy<rows; iy++) {
@@ -500,6 +541,32 @@ MATH</textarea>
     }
   }
 
+  function drawText(ctx, W, H) {
+    if (!state.text3d) { drawTextPlane(ctx, W, H); return; }
+    const texObj = makeTextTexture();
+    const {R, position} = textTransform();
+    const w = texObj.canvas.width / texObj.scale * 0.004;
+    const h = texObj.canvas.height / texObj.scale * 0.004;
+    const point = (uv, z) => projectLocal([(uv[0]-.5)*w, (.5-uv[1])*h, z], R, W, H, position);
+    const frontNear = R[2][2] >= 0;
+    drawTextPlane(ctx, W, H, frontNear ? state.textDepth : 0);
+    const sides = textOutline(texObj).map(edge => {
+      const points = [point(edge.a, 0), point(edge.b, 0), point(edge.b, state.textDepth), point(edge.a, state.textDepth)];
+      const normal = matVec(R, edge.normal);
+      const shade = Math.round(65 + 65 * Math.max(0, normal[0]*-.4 + normal[1]*.6 - normal[2]*.7));
+      return {points, shade, z: points.reduce((sum, p) => sum+p.z, 0)/4};
+    }).sort((a,b) => b.z-a.z);
+    for (const side of sides) {
+      if (side.points.some(p => p.z <= 0.05)) continue;
+      ctx.beginPath();
+      side.points.forEach((p, i) => i ? ctx.lineTo(p.x,p.y) : ctx.moveTo(p.x,p.y));
+      ctx.closePath();
+      ctx.fillStyle = 'rgb(' + [side.shade,side.shade,side.shade].join(',') + ')';
+      ctx.fill();
+    }
+    drawTextPlane(ctx, W, H, frontNear ? 0 : state.textDepth);
+  }
+
   function renderTo(ctx, W, H) {
     ctx.setTransform(1,0,0,1,0,0);
     ctx.clearRect(0,0,W,H);
@@ -507,7 +574,7 @@ MATH</textarea>
     ctx.fillRect(0,0,W,H);
 
     // Draw text first so the wireframe is never interrupted by the text.
-    drawTextPlane(ctx,W,H);
+    drawText(ctx,W,H);
 
     const cubeR = rotation(state.tilt, state.pan, state.roll);
     const verts = cubeVertices(state.cubeScale);
@@ -560,7 +627,8 @@ MATH</textarea>
     textRz: ["textRz","textRzOut", v => `${Number(v).toFixed(1)}°`],
     textTx: ["textTx","textTxOut", v => Number(v).toFixed(2)],
     textTy: ["textTy","textTyOut", v => Number(v).toFixed(2)],
-    textTz: ["textTz","textTzOut", v => Number(v).toFixed(2)]
+    textTz: ["textTz","textTzOut", v => Number(v).toFixed(2)],
+    textDepth: ["textDepth","textDepthOut", v => Number(v).toFixed(2)]
   };
 
   function bindSlider(key) {
@@ -577,6 +645,23 @@ MATH</textarea>
     sync();
   }
   Object.keys(controls).forEach(bindSlider);
+
+  function syncToggles() {
+    for (const key of ['followCube', 'text3d']) $(key).checked = state[key];
+    $('depthControl').hidden = !state.text3d;
+    $('rotationNote').textContent = state.followCube
+      ? 'Angles are relative to the cube. Text rotates and moves with the cube.'
+      : 'Angles are absolute. Cube rotation does not change the text.';
+    $('positionNote').textContent = state.followCube
+      ? 'Position in cube axes. The text offset rotates with the cube.'
+      : 'Position in fixed scene axes: X moves right, Y moves up, and Z moves away from the camera.';
+  }
+  for (const key of ['followCube', 'text3d']) $(key).addEventListener('change', () => {
+    state[key] = $(key).checked;
+    syncToggles();
+    scheduleRender();
+  });
+  syncToggles();
 
   $("text").addEventListener("input", e => {
     state.text=e.target.value;
@@ -606,6 +691,7 @@ MATH</textarea>
 
   $("resetBtn").addEventListener("click", () => {
     Object.assign(state, defaults);
+    syncToggles();
     customFontFamily=null;
     $("fontFile").value="";
     $("text").value=defaults.text;

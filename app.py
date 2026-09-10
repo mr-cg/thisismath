@@ -13,7 +13,7 @@ st.set_page_config(
 st.title("Parametric Cube Wireframe + Absolute 3D Text")
 st.caption(
     "The preview is rendered directly in the browser, so sliders update continuously while you drag them. "
-    "Cube rotation and text rotation are independent."
+    "Choose independent text or text that follows the cube, and enable 3D thickness."
 )
 
 st.markdown(
