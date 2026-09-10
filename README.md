@@ -1,20 +1,24 @@
+# Parametric Cube Wireframe + 3D Text — v3
 
-# Parametric Cube Wireframe + 3D Text — v2
+This revision fixes two deployment issues.
 
-## Main fix
+## Font discovery on Streamlit Cloud
 
-Text size is now geometric, not pixel-based.
+The previous version only used `font_manager.findSystemFonts()`. Streamlit Community Cloud may expose very few OS fonts, so the selector could collapse to only `Default Bold`.
 
-The control **Text block size (% of cube face)** scales the text block relative
-to a cube face edge:
+v3 also scans Matplotlib's own bundled font directory:
 
-- 40%: compact
-- 70–85%: good for the `THIS / IS / MATH` composition
-- 100%: block spans roughly one full face edge
-- above 100%: intentional oversized text
+```python
+Path(matplotlib.get_data_path()) / "fonts" / "ttf"
+```
 
-This means changing output resolution, camera FOV, or antialiasing no longer
-causes the text to become mysteriously tiny.
+That normally provides DejaVu and STIX families in the deployed Python environment. The app also scans an optional `./fonts` folder in your repo and lets you upload a `.ttf` or `.otf` from the sidebar.
+
+No font files are included in this ZIP.
+
+## Text sizing
+
+The renderer now crops the text texture to the actual alpha/ink bounds before scaling the 3D text plane. So `80% of cube face` is based on the visible lettering, not transparent padding around it.
 
 ## Run
 

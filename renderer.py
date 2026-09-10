@@ -166,7 +166,21 @@ def _render_text_texture(p: RenderParams):
         draw.text((x, y - box[1]), line, font=font, fill=fill)
         y += spacing
 
-    return rgba
+    # Tight-crop to the actual visible glyphs. This makes the geometric
+    # size slider refer to the ink itself, not invisible font-metric padding.
+    alpha = rgba.getchannel("A")
+    bbox = alpha.getbbox()
+    if bbox:
+        rgba = rgba.crop(bbox)
+
+    tiny_pad = max(2, 2 * aa)
+    padded = Image.new(
+        "RGBA",
+        (rgba.width + 2 * tiny_pad, rgba.height + 2 * tiny_pad),
+        (0, 0, 0, 0),
+    )
+    padded.alpha_composite(rgba, (tiny_pad, tiny_pad))
+    return padded
 
 
 def _homography(src: np.ndarray, dst: np.ndarray) -> np.ndarray:
